@@ -180,10 +180,16 @@ app.post("/api/chat", API_LIMIT, auth, raw, async (req, res) => {
 });
 
 app.use((err, req, res, next) => { console.error(err.message); res.status(err.status || 500).json({ error: err.message }); });
-// editor /app par, landing page / par. HTML hamesha taaza (cache nahi) taaki updates turant dikhein.
-app.get("/app", (req, res) => res.set("Cache-Control", "no-cache").sendFile(path.join(__dirname, "public", "app.html")));
-app.use(express.static(path.join(__dirname, "public"), {
-  setHeaders: (res, p) => { if (p.endsWith(".html")) res.set("Cache-Control", "no-cache"); },
-}));
+// Pages: landing "/" aur editor "/app". Pehle server.js ke bagal wali index.html/app.html dekhta hai,
+// nahi mile toh public/ folder. (Dono tareeke chalte hain.)
+const hasRoot = fs.existsSync(path.join(__dirname, "index.html")) && fs.existsSync(path.join(__dirname, "app.html"));
+const PUB = hasRoot ? __dirname : path.join(__dirname, "public");
+const page = file => (req, res) => {
+  const f = path.join(PUB, file);
+  if (!fs.existsSync(f)) return res.status(500).type("text").send(`${file} server par nahi mili. GitHub repo me server.js ke saath index.html aur app.html upload karein.`);
+  res.set("Cache-Control", "no-cache").sendFile(f);
+};
+app.get("/", page("index.html"));
+app.get("/app", page("app.html"));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`PrimeSub on http://localhost:${PORT}  | access codes: ${ACCESS_CODES.length || "OFF (sab khule)"}`));
+app.listen(PORT, () => console.log(`PrimeSub on http://localhost:${PORT}  | access codes: ${ACCESS_CODES.length || "OFF (sab khule)"}  | pages: ${hasRoot ? "root" : "public/"}`));
