@@ -1291,7 +1291,7 @@
         setLang(mode);
         const warn = activeWords.filter(w => w.u).length;
         refreshMe();
-        status.innerText = `${activeWords.length} words ready.` + (warn ? ` ${warn} words need review.` : '') + (refineMissing ? ` ${refineMissing} could not be auto-corrected.` : '');
+        status.innerText = `${activeWords.length} words ready.` + (warn ? ` ${warn} words need review.` : '') + (refineMissing ? ` AI spelling check was unavailable for ${refineMissing} words${refineError ? ' (' + refineError.slice(0, 80) + ')' : ''}.` : '');
       } catch (err) {
         status.innerText = "Error: " + err.message;
       }
@@ -1306,34 +1306,54 @@
       "achha": "achha", "acha": "achha", "chahiye": "chahiye", "vidio": "video"
     };
 
+    // Sabse common Hindi words: seedha sahi Roman spelling (AI na chale tab bhi captions padhne layak rahein)
+    const HINDI_WORDS_RAW = {
+      'है':'hai','हैं':'hain','था':'tha','थी':'thi','थे':'the','हो':'ho','होता':'hota','होती':'hoti','होते':'hote','होना':'hona','हूँ':'hoon','हूं':'hoon','होगा':'hoga','होगी':'hogi','होगे':'hoge',
+      'मैं':'main','में':'mein','मुझे':'mujhe','मेरा':'mera','मेरी':'meri','मेरे':'mere','हम':'hum','हमें':'hamein','हमारी':'hamari','हमारा':'hamara','तुम':'tum','आप':'aap','आपको':'aapko','आपके':'aapke','आपकी':'aapki','आपका':'aapka','आपने':'aapne',
+      'वो':'wo','वह':'woh','वे':'we','यह':'yeh','ये':'ye','इस':'is','उस':'us','इसका':'iska','इसकी':'iski','इसके':'iske','उसका':'uska','उसकी':'uski','उसके':'uske','उनकी':'unki','उनके':'unke','उनका':'unka','इन':'in','उन':'un','इसलिए':'isliye',
+      'और':'aur','या':'ya','लेकिन':'lekin','मगर':'magar','पर':'par','से':'se','को':'ko','का':'ka','की':'ki','के':'ke','कि':'ki','ही':'hi','भी':'bhi','तो':'to','नहीं':'nahin','न':'na','ना':'na',
+      'कुछ':'kuch','सब':'sab','सभी':'sabhi','कोई':'koi','क्या':'kya','क्यों':'kyon','क्योंकि':'kyunki','कैसे':'kaise','कहाँ':'kahan','कहां':'kahan','कब':'kab','कौन':'kaun','जो':'jo','जब':'jab','तब':'tab','अगर':'agar','फिर':'phir','अब':'ab','बहुत':'bahut','बस':'bas','सिर्फ':'sirf','सिर्फ़':'sirf','सिर्फ़':'sirf',
+      'जैसा':'jaisa','जैसे':'jaise','ऐसा':'aisa','ऐसे':'aise','वैसे':'waise','एक':'ek','दो':'do','तीन':'teen','चार':'chaar','पाँच':'paanch','लोग':'log','साल':'saal','बार':'baar','दिन':'din','समय':'samay','बात':'baat','काम':'kaam',
+      'पैसा':'paisa','पैसे':'paise','रुपये':'rupaye','रुपए':'rupaye','करोड़':'crore','लाख':'lakh','लाखों':'lakhon','कंपनी':'company','कम्पनी':'company','कंपनियाँ':'companies','कंपनियां':'companies','कंपनियों':'companies','मार्केट':'market','ब्रांड':'brand','वीडियो':'video','शेयर':'share','सुपर':'super','प्रोडक्ट':'product',
+      'करें':'karein','करो':'karo','करना':'karna','करता':'karta','करती':'karti','करते':'karte','कर':'kar','किया':'kiya','करके':'karke','हुआ':'hua','हुई':'hui','हुए':'hue','रहा':'raha','रही':'rahi','रहे':'rahe','गया':'gaya','गई':'gayi','गए':'gaye','सकता':'sakta','सकती':'sakti','सकते':'sakte',
+      'चाहिए':'chahiye','लगता':'lagta','लगती':'lagti','लगे':'lage','लगोगे':'lagoge','देखने':'dekhne','देखो':'dekho','देखा':'dekha','जानते':'jaante','जानता':'jaanta','जानने':'jaanne','पता':'pata','चला':'chala','आज':'aaj','कल':'kal','अभी':'abhi','हमेशा':'hamesha','कभी':'kabhi','कई':'kai',
+      'बड़ी':'badi','बड़ा':'bada','बड़े':'bade','छोटी':'chhoti','छोटा':'chhota','नया':'naya','नई':'nayi','नए':'naye','अच्छा':'achha','सच':'sach','गलत':'galat','पहली':'pehli','पहला':'pehla','पूरी':'puri','पूरा':'pura','ज़िंदगी':'zindagi','जिंदगी':'zindagi','दोस्त':'dost','समझदार':'samajhdar','असली':'asli','खिलाड़ी':'khiladi','विकल्प':'vikalp','मतलब':'matlab',
+      'बाद':'baad','पास':'paas','लिए':'liye','साथ':'saath','बिना':'bina','अपने':'apne','अपना':'apna','अपनी':'apni','दूसरा':'doosra','ज्यादा':'zyada','ज़्यादा':'zyada','कितना':'kitna','कितने':'kitne','इतना':'itna','उतना':'utna','हर':'har','सारे':'saare','वाले':'wale','वाला':'wala','वाली':'wali','रोज़':'roz','रोज':'roz','इस्तेमाल':'istemal','नज़र':'nazar','नजर':'nazar','नई':'nayi','सेकंड':'second','सेकेंड':'second','मिनट':'minute','फिल्मी':'filmy','लाइन':'line','भारत':'Bharat','इंडिया':'India'
+    };
+    const HINDI_WORDS = (() => { const m = {}; for (const k in HINDI_WORDS_RAW) m[k.replace(/\u093C/g, '')] = HINDI_WORDS_RAW[k]; return m; })();
+
     function cleanDevanagariToRoman(text) {
       const lower = text.trim();
-      if (COMMON_SPELL_CORRECTIONS[lower]) {
-        return COMMON_SPELL_CORRECTIONS[lower];
-      }
-      if (!/[\u0900-\u097F]/.test(text)) {
-        return text;
-      }
+      if (COMMON_SPELL_CORRECTIONS[lower]) return COMMON_SPELL_CORRECTIONS[lower];
+      if (!/[\u0900-\u097F]/.test(text)) return text;
+      const key = lower.replace(/[\u093C।,.!?"']/g, '');
+      if (HINDI_WORDS[key]) return HINDI_WORDS[key];
+
       const consonants = {
-        'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh',
+        'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'n',
         'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n', 'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
-        'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm', 'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'स': 's', 'ह': 'h'
+        'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm', 'य': 'y', 'र': 'r', 'ल': 'l', 'ळ': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h'
       };
-      const vowels = { 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo', 'ए': 'e', 'ओ': 'o' };
-      const matras = { 'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'े': 'e', 'ो': 'o', 'ं': 'n', '्': '' };
+      const nukta = { 'ज': 'z', 'फ': 'f', 'ड': 'r', 'ढ': 'rh' };
+      const vowels = { 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'i', 'उ': 'u', 'ऊ': 'oo', 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri', 'ऑ': 'o' };
+      const matras = { 'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ृ': 'ri', 'ॉ': 'o', 'ॅ': 'e', 'ं': 'n', 'ँ': 'n', 'ः': 'h', '्': '', '़': '' };
 
       let out = "";
-      const chars = Array.from(text);
+      const chars = Array.from(text.replace(/[।]/g, ''));
       for (let i = 0; i < chars.length; i++) {
         const c = chars[i];
         if (vowels[c]) out += vowels[c];
         else if (consonants[c]) {
-          out += consonants[c];
-          if (i < chars.length - 1 && consonants[chars[i+1]]) out += "a";
+          let nx = chars[i + 1];
+          if (nx === '़') { out += nukta[c] || consonants[c]; i++; nx = chars[i + 1]; }
+          else out += consonants[c];
+          // agle akshar se pehle chhota 'a' (consonant ya anusvara ke saamne)
+          if (nx && (consonants[nx] || nx === 'ं' || nx === 'ँ')) out += 'a';
         }
         else if (matras[c] !== undefined) out += matras[c];
         else out += c;
       }
+      out = out.replace(/ee$/, 'i');
       return out || text;
     }
 
@@ -1420,20 +1440,33 @@
     let currentVideoId = '';
 
     // ================= AI SPELLING + CONTEXT FIX =================
-    async function groqChat(messages) {
+    const waitMs = ms => new Promise(r => setTimeout(r, window.__fastWait ? 1 : ms));
+    function retryAfterMs(msg) {
+      const m = /try again in (?:(\d+)m)?\s*([\d.]+)\s*(ms|s)/i.exec(String(msg || ''));
+      if (!m) return 8000;
+      let sec = (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2]) / (m[3].toLowerCase() === 'ms' ? 1000 : 1);
+      return Math.min(30000, Math.max(1500, Math.ceil(sec * 1000) + 500));
+    }
+    async function groqChat(messages, maxTokens) {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: apiHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ messages, response_format: { type: 'json_object' }, max_completion_tokens: 6000 })
+        body: JSON.stringify({ messages, response_format: { type: 'json_object' }, max_completion_tokens: maxTokens || 2500 })
       });
-      if (!res.ok) throw new Error('chat ' + res.status);
+      if (!res.ok) {
+        let msg = '';
+        try { const j = await res.json(); msg = (j.error && (j.error.message || j.error)) || ''; } catch (e) {}
+        const err = new Error(`chat ${res.status}${msg ? ': ' + String(msg).slice(0, 140) : ''}`);
+        err.status = res.status; err.detail = String(msg);
+        throw err;
+      }
       const data = await res.json();
       return JSON.parse(data.choices[0].message.content);
     }
 
     // currentOpts.script: 'roman' -> hinglishTokens banta hai, 'native' -> rawTokens (apni script me) theek hota hai
-    const BUILTIN_FIX = { bhee: 'bhi', seyar: 'share', karen: 'karein', veediyo: 'video', aapako: 'aapko', pahalee: 'pehli', kee: 'ki', aapakee: 'aapki', pooree: 'puri', jindagee: 'zindagi', sirph: 'sirf', kntrol: 'control', karatee: 'karti', lagata: 'lagta', sakate: 'sakte', sakata: 'sakta', kyonki: 'kyunki', istamal: 'istemal', janane: 'jaanne', vajat: 'wajah', badne: 'badhne', knpanee: 'company', knpaniya: 'companies', companya: 'companies', paayega: 'payega', kahoon: 'kahun', aate: 'aate' };
-    let refineMissing = 0;
+    const BUILTIN_FIX = { bhee: 'bhi', seyar: 'share', karen: 'karein', veediyo: 'video', aapako: 'aapko', pahalee: 'pehli', kee: 'ki', aapakee: 'aapki', pooree: 'puri', jindagee: 'zindagi', sirph: 'sirf', kntrol: 'control', karatee: 'karti', lagata: 'lagta', sakate: 'sakte', sakata: 'sakta', kyonki: 'kyunki', istamal: 'istemal', janane: 'jaanne', vajat: 'wajah', badne: 'badhne', knpanee: 'company', knpaniya: 'companies', companya: 'companies', paayega: 'payega', kahoon: 'kahun', kahoo: 'kahun', men: 'mein', h: 'hai', hn: 'hain', hee: 'hi', naheen: 'nahin', roj: 'roz', vale: 'wale', agale: 'agle', jyada: 'zyada', kuchh: 'kuch', sekend: 'second', supar: 'super', rupe: 'rupaye', aate: 'aate' };
+    let refineMissing = 0, refineError = '';
     async function refineTranscript() {
       if (rawTokens.length === 0) return;
       const status = document.getElementById('statusText');
@@ -1457,8 +1490,8 @@
       try {
         const t = await groqChat([
           { role: 'system', content: `You read an auto-generated ${L.name} video transcript (it contains speech-recognition mistakes). Return ONLY JSON: {"topic":"one short English sentence about what the video is about","terms":["up to 40 correct spellings of brands, companies, products, jargon and proper nouns that probably appear in this video, e.g. Lifebuoy, Nestle, Shrinkflation, FMCG"]}` },
-          { role: 'user', content: fullText }
-        ]);
+          { role: 'user', content: fullText.slice(0, 3500) }
+        ], 700);
         topic = `Topic: ${t.topic || ''}. Likely terms: ${(t.terms || []).join(', ')}.`;
       } catch (e) { console.warn('topic pass failed', e); }
 
@@ -1471,7 +1504,7 @@ ${goal}
 "u": true ONLY if you think the speech model heard this word wrongly or you are unsure of it.
 Rules:
 - English words use proper English spelling (market, supermarket, video, reels, channel, marketing, scam, FMCG, brand, company, minute, second, free, raw material).
-- Use the FULL transcript meaning and topic to fix mis-heard words (e.g. "Sling Fraction" -> Shrinkflation, "ro material" -> raw material). If a token is nonsense, replace it with the most likely intended word and set "u": true.
+- Use the topic and each token's surrounding words (given in its context) to fix mis-heard words (e.g. "Sling Fraction" -> Shrinkflation, "ro material" -> raw material). If a token is nonsense, replace it with the most likely intended word and set "u": true.
 - Many tokens can be Indian brand, company or product names that were misheard (e.g. "Life Point" -> Lifebuoy, "Sun Park" -> Sun Pharma, "Yipti" -> Yippee). If a token sounds like a brand or company that fits the topic, write its official English spelling and set "u": true.
 - If one real word was split across tokens, put the whole corrected word in the FIRST token and "-" for the following tokens.
 - Simple common spellings only (never stretched ones like aapakee/pooree/jindagee). No punctuation.
@@ -1481,16 +1514,16 @@ Return ONLY JSON: {"items":[{"i":<index>,"w":"...","u":false}]}`;
       // har token ka "done" hisaab: jo word AI se theek nahi hua use dobara bhejo
       const done = rawTokens.map(() => false);
       const ctxOf = i => {
-        const pre = rawTokens.slice(Math.max(0, i - 3), i).map(t => t.word).join(' ');
-        const post = rawTokens.slice(i + 1, i + 4).map(t => t.word).join(' ');
+        const pre = rawTokens.slice(Math.max(0, i - 5), i).map(t => t.word).join(' ');
+        const post = rawTokens.slice(i + 1, i + 6).map(t => t.word).join(' ');
         return `${pre} [${rawTokens[i].word}] ${post}`;
       };
       async function fixIndices(indices) {
         const want = new Set(indices);
         const list = indices.map(i => `${i}: ${rawTokens[i].word}   (context: ${ctxOf(i)})`).join('\n');
         // shuru ka hissa har call me same hai taaki Groq ka prompt cache (sasta) kaam kare
-        const user = `Full transcript (for meaning):\n${fullText}\n\nTokens to fix:\n${list}`;
-        const parsed = await groqChat([{ role: 'system', content: SYS }, { role: 'user', content: user }]);
+        const user = `Tokens to fix:\n${list}`;
+        const parsed = await groqChat([{ role: 'system', content: SYS }, { role: 'user', content: user }], 2500);
         (parsed.items || []).forEach(it => {
           const i = Number(it.i);
           if (!want.has(i)) return;
@@ -1504,7 +1537,26 @@ Return ONLY JSON: {"items":[{"i":<index>,"w":"...","u":false}]}`;
         });
       }
       const pending = () => rawTokens.map((_, i) => i).filter(i => !done[i]);
-      const BATCH = 60;
+      const BATCH = 40;
+      refineError = '';
+      async function fixSafe(part, depth) {
+        try { await fixIndices(part); }
+        catch (e) {
+          refineError = e.message;
+          if (e.status === 413 && part.length > 8) {          // request badi hai -> aadha-aadha karke bhejo
+            const h = Math.ceil(part.length / 2);
+            await fixSafe(part.slice(0, h), depth + 1);
+            await fixSafe(part.slice(h), depth + 1);
+            return;
+          }
+          if (e.status === 429 && depth < 3) {                // rate limit -> thoda ruko, phir dobara
+            document.getElementById('statusText').innerText = 'Step 3/3: AI is busy, waiting a few seconds...';
+            await waitMs(retryAfterMs(e.detail));
+            return fixSafe(part, depth + 1);
+          }
+          throw e;
+        }
+      }
       let fatal = false;
       for (let round = 0; round < 4 && !fatal; round++) {
         const todo = pending();
@@ -1513,7 +1565,7 @@ Return ONLY JSON: {"items":[{"i":<index>,"w":"...","u":false}]}`;
           const part = todo.slice(k, k + BATCH);
           const finished = rawTokens.length - todo.length + Math.min(k + BATCH, todo.length);
           status.innerText = `Step 3/3: Refining spelling (${finished}/${rawTokens.length} words${round ? ', retry ' + round : ''})...`;
-          try { await fixIndices(part); }
+          try { await fixSafe(part, 0); }
           catch (e) {
             console.warn('LLM batch failed', e);
             if (/chat (401|402|429)/.test(String(e.message))) { fatal = true; break; }   // retry se fayda nahi

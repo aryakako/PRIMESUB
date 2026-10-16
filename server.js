@@ -100,6 +100,28 @@ app.get("/api/config", (req, res) => res.json({
 app.get("/api/me", rateLimit(60, 600000), auth, (req, res) =>
   res.json({ minutesLeft: Math.round(leftSec(req.code) / 6) / 10, minutesTotal: CODE_MINUTES, maxVideoMinutes: MAX_VIDEO_MINUTES }));
 
+// Admin: Groq key aur chat models ki jaanch. Browser me kholein: /api/admin/usage ki tarah, ADMIN_KEY ke saath.
+app.get("/api/admin/selftest", async (req, res) => {
+  if (!ADMIN_KEY || req.query.key !== ADMIN_KEY) return res.status(401).json({ error: "no" });
+  if (!KEY) return res.json({ error: "GROQ_API_KEY missing" });
+  const out = { time: new Date().toISOString(), models: [] };
+  try {
+    const r = await fetch(`${GROQ}/models`, { headers: { Authorization: `Bearer ${KEY}` } });
+    out.keyCheck = r.status;
+  } catch (e) { out.keyCheck = e.message; }
+  for (const model of CHAT_MODELS) {
+    const t0 = Date.now();
+    try {
+      const payload = { model, messages: [{ role: "user", content: 'Return JSON {"ok":true}' }], response_format: { type: "json_object" }, max_completion_tokens: 200, temperature: 0 };
+      if (model.startsWith("openai/gpt-oss")) payload.reasoning_effort = "low";
+      const r = await fetch(`${GROQ}/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const text = await r.text();
+      out.models.push({ model, status: r.status, ms: Date.now() - t0, detail: r.ok ? "ok" : text.slice(0, 300) });
+    } catch (e) { out.models.push({ model, status: 0, detail: e.message }); }
+  }
+  res.json(out);
+});
+
 app.get("/api/admin/usage", (req, res) => {
   if (!ADMIN_KEY || req.query.key !== ADMIN_KEY) return res.status(401).json({ error: "no" });
   const rows = Object.entries(usage).map(([code, v]) => ({ code, minutesUsed: +(v.sec / 60).toFixed(1), videos: v.videos, costRs: +(v.usd * USD_INR).toFixed(2) }));
